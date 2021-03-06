@@ -597,7 +597,7 @@ class PIDThermostat(ClimateEntity, RestoreEntity):
             elif self._control_output > 0:
                 self.analog_to_pwm()
             else:
-                if self._active:
+                if self._is_device_active:
                     _LOGGER.info("Turning off heater %s", self.heater_entity_id)
                     await self._async_heater_turn_off()
                     self.time_last_change = time.time()
@@ -605,29 +605,32 @@ class PIDThermostat(ClimateEntity, RestoreEntity):
             _LOGGER.info("Change state of heater %s to %s", self.heater_entity_id, self._control_output)
             self.hass.states.async_set(self.heater_entity_id, self._control_output)
 
-    def analog_to_pwm(self):
+    async def analog_to_pwm(self):
         time_on = self._pwm * self._control_output / 100
         time_off = self._pwm * (100 - self._control_output) / 100
         time_passed = time.time() - self.time_last_change
-        self.pwm_controller(
+        _LOGGER.info("PWM : time_on : %s time_off : %s time_passed : %s", time_on, time_off, time_passed)
+        await self.pwm_controller(
             time_on,
             time_off,
             time_passed,
         )
 
-    def pwm_controller(self, time_on, time_off, time_passed):
+    async def pwm_controller(self, time_on, time_off, time_passed):
         """turn off and on the heater proportionally to controlvalue."""
         if self._is_device_active:
             if time_on < time_passed:
-                _LOGGER.info("Turning off heater %s", self.heater_entity_id)
-                self._async_heater_turn_off()
+                _LOGGER.info("PWM : Turning off heater %s", self.heater_entity_id)
+                await self._async_heater_turn_off()
                 self.time_last_change = time.time()
             else:
-                _LOGGER.info("Time until %s turns off: %s sec", self.heater_entity_id, time_on - time_passed)
+                _LOGGER.info("PWM : Time until %s turns off: %s sec", self.heater_entity_id, time_on - time_passed)
         elif time_on > self.min_cycle_duration.seconds:
             if time_off < time_passed:
-                _LOGGER.info("Turning on heater %s", self.heater_entity_id)
-                self._async_heater_turn_on()
+                _LOGGER.info("PWM : Turning on heater %s", self.heater_entity_id)
+                await self._async_heater_turn_on()
                 self.time_last_change = time.time()
             else:
-                _LOGGER.info("Time until %s turns on: %s sec", self.heater_entity_id, time_off - time_passed)
+                _LOGGER.info("PWM : Time until %s turns on: %s sec", self.heater_entity_id, time_off - time_passed)
+        else:
+            _LOGGER.info("PWM : Time too short")
